@@ -1,0 +1,6 @@
+The current idea is to base the code off Jeff Rowberg's i2cdevlib example code, as suggested there. That is under an MIT license, so there should be no issue. 
+Currently the example_dmp6 folder contains the main MPU-6050_DMP6 folder contains the example files, and MPU6050-lib contains the full library, for reference.
+
+The library functions are documented at: http://www.i2cdevlib.com/docs/html/class_m_p_u6050.html
+
+See specification.md 
