@@ -1,3 +1,5 @@
+#include <I2Cdev.h>
+
 /*
 SPS Balloonsat 2014 - ASGARD-IV
 MPU-6050 non-integrated motion sensing code
@@ -5,18 +7,17 @@ Based off Jeff Rowberg's i2cdevlib library and example code (which is MIT licens
 
 CHANGELOG: (also see git)
 2014-1-30:  Created file. Added most initial config code. 
+2014-2-4: Finished off roughly. Needs some tweaking. Not too bad though; seems to work.
 
 */
+
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
-#include <MPU6050_9Axis_MotionApps41.h>
-#include <MPU6050.h>
 #include <helper_3dmath.h>
 //wire library for i2c + MPU libraries
 
 MPU6050 mpu;//where it all happens!
 //Taken from example code
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 uint8_t fifoBuffer[64]; // FIFO storage buffer
 Quaternion q;           // [w, x, y, z]         quaternion container
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
@@ -24,35 +25,40 @@ VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measur
 VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+int fifoCount;
+int packetSize;
+volatile boolean mpuInterrupt=false;
+boolean mpuIntStatus = false;
 
 //using the same variables makes life easier with the actual DMP motion reading section.
 
-volatile bool dmpDataReady(){
+void dmpDataReady(){
   mpuInterrupt = true;  //same code as i2cdevlib
 }
 
 void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(9600);
-  delay(1000);//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
+  while(!Serial.available());//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
   mpu.initialize();
   if(!mpu.testConnection())
     Serial.println("Error - MPU6050 not found.");
   else
     Serial.println("Online.");
  
-  int dmpConfigStatus = mpu.dmpInitilize();
+  int dmpConfigStatus = mpu.dmpInitialize();
   //now to set gyro offsets - currently unknown. Code copied/pasted from example for now
-    mpu.setXGyroOffset(220);
-    mpu.setYGyroOffset(76);
-    mpu.setZGyroOffset(-85);
-    mpu.setZAccelOffset(1788); //Don't know what these'll be for us.
+    mpu.setXGyroOffset(0);
+    mpu.setYGyroOffset(0);
+    mpu.setZGyroOffset(0);
+    mpu.setZAccelOffset(0); //Don't know what these'll be for us.
     
     if(dmpConfigStatus == 0){
       Serial.println("Configuration success.");
       //Consider using interrupts - can we afford them with everything else going on?
       //On my Arduino Leonardo, interrupt pin 0 is actually one of the i2c pins, so we'll use interrupt pin 2 (pin 0)
-      attachInterrupt(0, dmpDataReady, RISING);
+      attachInterrupt(2, dmpDataReady, RISING);
+      packetSize = mpu.dmpGetFIFOPacketSize();
     }
     else{
       if(dmpConfigStatus == 1)
@@ -60,21 +66,22 @@ void setup(){
       else if(dmpConfigStatus == 2)
         Serial.println("DMP config updates failed.");
     }  
-    
-    }
+        Serial.println("Enabling DMP");//It transpires that this is important. Can't think why.
+     mpu.setDMPEnabled(true);
+}
 
 void loop(){
+  delay(50);
+  //stops my laptop overheating with a Leonardo!
   if(mpuInterrupt == true){
     mpuInterrupt = false;    
-                                                          //next section lifted directly from example code incl. comments.  Some comments are added for clarity.=============================
+                     //next section lifted directly from example code incl. comments.  Some comments are added for clarity.=============================
        // reset interrupt flag and get INT_STATUS byte
-    mpuInterrupt = false;
     mpuIntStatus = mpu.getIntStatus();
 
     // get current FIFO count
     fifoCount = mpu.getFIFOCount();  //I'm guessing we should aim to have this at around thirty-forty to avoid excessive polling freq, which could interfere w/ the gamma ray 
-                                     //  pulse counting section, which should also use interrupts.
-
+                                    //  pulse counting section, which should also use interrupts.
     // check for overflow (this should never happen unless our code is too inefficient)
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
         // reset so we can continue cleanly
@@ -83,18 +90,18 @@ void loop(){
                                                 //                            Otherwise we'll just have to improve the speed of the other code in the main loop.
 
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
-    } else if (mpuIntStatus & 0x02) {
+       } else if (mpuIntStatus & 0x02) {
         // wait for correct available data length, should be a VERY short wait
         while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
 
         // read a packet from FIFO
-        mpu.getFIFOBytes(fifoBuffer, packetSize);  //read out all of the FIFO data available.
+        mpu.getFIFOBytes(fifoBuffer, packetSize);
         
         // track FIFO count here in case there is > 1 packet available
         // (this lets us immediately read more without waiting for an interrupt)
         fifoCount -= packetSize;
-
-  /*      #ifdef OUTPUT_READABLE_QUATERNION
+/*
+        #ifdef OUTPUT_READABLE_QUATERNION
             // display quaternion values in easy matrix form: w x y z
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             Serial.print("quat\t");
@@ -117,9 +124,9 @@ void loop(){
             Serial.print(euler[1] * 180/M_PI);
             Serial.print("\t");
             Serial.println(euler[2] * 180/M_PI);
-        #endif */
-
-     //   #ifdef OUTPUT_READABLE_YAWPITCHROLL
+        #endif
+*/
+  //      #ifdef OUTPUT_READABLE_YAWPITCHROLL
             // display Euler angles in degrees
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
@@ -130,9 +137,9 @@ void loop(){
             Serial.print(ypr[1] * 180/M_PI);
             Serial.print("\t");
             Serial.println(ypr[2] * 180/M_PI);
-   //     #endif
+//        #endif
 
-    /*    #ifdef OUTPUT_READABLE_REALACCEL
+     //   #ifdef OUTPUT_READABLE_REALACCEL
             // display real acceleration, adjusted to remove gravity
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetAccel(&aa, fifoBuffer);
@@ -144,9 +151,9 @@ void loop(){
             Serial.print(aaReal.y);
             Serial.print("\t");
             Serial.println(aaReal.z);
-       #endif */
+     /*   #endif
 
-   //     #ifdef OUTPUT_READABLE_WORLDACCEL
+        #ifdef OUTPUT_READABLE_WORLDACCEL
             // display initial world-frame acceleration, adjusted to remove gravity
             // and rotated based on known orientation from quaternion
             mpu.dmpGetQuaternion(&q, fifoBuffer);
@@ -160,9 +167,11 @@ void loop(){
             Serial.print(aaWorld.y);
             Serial.print("\t");
             Serial.println(aaWorld.z);
-    //    #endif
+        #endif
+    
+*/
         //theoretically that should be all of the DMP reading code required. Now I just need to develop some sort of logging solution - possibly taking a DMP gyro reading every second, or as frequently
         //as feasible, and an accel max reading every second? (on each axis.) That'll produce rather a lot of data after a multi-hour flight - we really must look at storage, and soon.
     }
-}
 
+}}
