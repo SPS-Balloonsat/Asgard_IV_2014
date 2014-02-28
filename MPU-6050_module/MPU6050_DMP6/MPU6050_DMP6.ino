@@ -196,12 +196,14 @@ void setup() {
     // load and configure the DMP
     Serial.println(F("Initializing DMP..."));
     devStatus = mpu.dmpInitialize();
-
-    // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXGyroOffset(220);
-    mpu.setYGyroOffset(76);
-    mpu.setZGyroOffset(-85);
-    mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
+//-2523	396	1266	-11	-8	13
+    mpu.setXAccelOffset(-2523);
+    mpu.setYAccelOffset(396);
+    mpu.setZAccelOffset(1266);
+    mpu.setXGyroOffset(-11);
+    mpu.setYGyroOffset(-8);
+    mpu.setZGyroOffset(13);
+    
 
     // make sure it worked (returns 0 if so)
     if (devStatus == 0) {

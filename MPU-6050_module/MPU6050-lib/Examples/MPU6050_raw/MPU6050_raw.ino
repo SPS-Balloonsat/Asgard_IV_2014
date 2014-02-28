@@ -66,6 +66,7 @@ int16_t gx, gy, gz;
 //#define OUTPUT_BINARY_ACCELGYRO
 
 
+
 #define LED_PIN 13
 bool blinkState = false;
 
@@ -80,8 +81,8 @@ void setup() {
     // initialize serial communication
     // (38400 chosen because it works as well at 8MHz as it does at 16MHz, but
     // it's really up to you depending on your project)
-    Serial.begin(38400);
-
+    Serial.begin(9600);
+  while(!Serial.available());
     // initialize device
     Serial.println("Initializing I2C devices...");
     accelgyro.initialize();
@@ -91,7 +92,7 @@ void setup() {
     Serial.println(accelgyro.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
 
     // use the code below to change accel/gyro offset values
-    /*
+    
     Serial.println("Updating internal sensor offsets...");
     // -76	-2359	1688	0	0	0
     Serial.print(accelgyro.getXAccelOffset()); Serial.print("\t"); // -76
@@ -101,9 +102,13 @@ void setup() {
     Serial.print(accelgyro.getYGyroOffset()); Serial.print("\t"); // 0
     Serial.print(accelgyro.getZGyroOffset()); Serial.print("\t"); // 0
     Serial.print("\n");
-    accelgyro.setXGyroOffset(220);
-    accelgyro.setYGyroOffset(76);
-    accelgyro.setZGyroOffset(-85);
+    accelgyro.setXGyroOffset(-10);
+    accelgyro.setYGyroOffset(-7);
+    accelgyro.setZGyroOffset(12);
+    accelgyro.setXAccelOffset(-2548);
+    accelgyro.setYAccelOffset(525);
+    accelgyro.setZAccelOffset(1270); //Don't know what these'll be for us.
+    
     Serial.print(accelgyro.getXAccelOffset()); Serial.print("\t"); // -76
     Serial.print(accelgyro.getYAccelOffset()); Serial.print("\t"); // -2359
     Serial.print(accelgyro.getZAccelOffset()); Serial.print("\t"); // 1688
@@ -111,7 +116,7 @@ void setup() {
     Serial.print(accelgyro.getYGyroOffset()); Serial.print("\t"); // 0
     Serial.print(accelgyro.getZGyroOffset()); Serial.print("\t"); // 0
     Serial.print("\n");
-    */
+    
 
     // configure Arduino LED for
     pinMode(LED_PIN, OUTPUT);

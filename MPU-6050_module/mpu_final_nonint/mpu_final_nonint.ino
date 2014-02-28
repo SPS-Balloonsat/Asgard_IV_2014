@@ -1,16 +1,19 @@
 #include <I2Cdev.h>
-
 /*
 SPS Balloonsat 2014 - ASGARD-IV
 MPU-6050 non-integrated motion sensing code
 Based off Jeff Rowberg's i2cdevlib library and example code (which is MIT licensed)
+NB This code relies upon the MPU6050_6Axis_MotionApps20.h file
+having been altered such that line 305 reads 0x02,   0x16,   0x02,   0x00, 0x1E               // D_0_22 inv_set_fifo_rate
+(the last one being the altered number)
+This drops the FIFO IN/OUT rate to only around 5-6Hz, which allows code doing other stuff to keep up.
+
 
 CHANGELOG: (also see git)
 2014-1-30:  Created file. Added most initial config code. 
 2014-2-4: Finished off roughly. Needs some tweaking. Not too bad though; seems to work.
-
+014-2-28: Added some offsets created by calibration program available on forum. Seems to be roughly accurate. Added averaging mechanism for accelerometer.
 */
-
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
 #include <helper_3dmath.h>
@@ -27,6 +30,13 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 int fifoCount;
 int packetSize;
+
+int xAccelMax, xAccelMin, xAccelAvg, xAccelSampCount;
+int yAccelMax, yAccelMin, yAccelAvg, yAccelSampCount;
+int zAccelMax, zAccelMin, zAccelAvg,zAccelSampCount;//to be used for the purposes suggested by the names!
+int xGyroAvg, yGyroAvg, zGyroAvg, xGyroSampCount,yGyroSampCount,zGyroSampCount;
+unsigned long averageTimer = 0;
+#define averagePeriod 8500
 volatile boolean mpuInterrupt=false;
 boolean mpuIntStatus = false;
 
@@ -47,11 +57,14 @@ void setup(){
     Serial.println("Online.");
  
   int dmpConfigStatus = mpu.dmpInitialize();
-  //now to set gyro offsets - currently unknown. Code copied/pasted from example for now
-    mpu.setXGyroOffset(0);
-    mpu.setYGyroOffset(0);
-    mpu.setZGyroOffset(0);
-    mpu.setZAccelOffset(0); //Don't know what these'll be for us.
+//Calibration code offsets; -2523	396	1266	-11	-8	13
+    mpu.setXAccelOffset(-2518);
+    mpu.setYAccelOffset(395);
+    mpu.setZAccelOffset(1267);
+    mpu.setXGyroOffset(-11);
+    mpu.setYGyroOffset(-8);
+    mpu.setZGyroOffset(14);
+    
     
     if(dmpConfigStatus == 0){
       Serial.println("Configuration success.");
@@ -68,11 +81,36 @@ void setup(){
     }  
         Serial.println("Enabling DMP");//It transpires that this is important. Can't think why.
      mpu.setDMPEnabled(true);
+     averageTimer = millis();
+
 }
 
 void loop(){
-  delay(50);
-  //stops my laptop overheating with a Leonardo!
+    //other code here.
+    if ((millis()-averageTimer) >= averagePeriod){
+      //round up averages
+      //store instead of Serial
+      xAccelAvg = (int)(xAccelAvg / xAccelSampCount);
+      yAccelAvg = (yAccelAvg / yAccelSampCount);
+      zAccelAvg = (zAccelAvg / zAccelSampCount);
+      Serial.println(xAccelAvg);
+      Serial.println(yAccelAvg);
+      Serial.println(zAccelAvg);
+      Serial.println("=========================");
+     averageTimer = millis();
+     xAccelAvg = 0;
+     yAccelAvg = 0;
+     zAccelAvg = 0;
+     xAccelSampCount = 0;
+     yAccelSampCount = 0;
+     zAccelSampCount = 0;
+     
+    }
+    
+    
+    
+    
+  //=======================================================================================================================================================
   if(mpuInterrupt == true){
     mpuInterrupt = false;    
                      //next section lifted directly from example code incl. comments.  Some comments are added for clarity.=============================
@@ -128,7 +166,7 @@ void loop(){
 */
   //      #ifdef OUTPUT_READABLE_YAWPITCHROLL
             // display Euler angles in degrees
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
+/*            mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
             Serial.print("ypr\t");
@@ -136,7 +174,7 @@ void loop(){
             Serial.print("\t");
             Serial.print(ypr[1] * 180/M_PI);
             Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);
+            Serial.println(ypr[2] * 180/M_PI);*/
 //        #endif
 
      //   #ifdef OUTPUT_READABLE_REALACCEL
@@ -145,12 +183,28 @@ void loop(){
             mpu.dmpGetAccel(&aa, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-            Serial.print("areal\t");
+  /*          Serial.print("areal\t");
             Serial.print(aaReal.x);
             Serial.print("\t");
             Serial.print(aaReal.y);
             Serial.print("\t");
-            Serial.println(aaReal.z);
+            Serial.println(aaReal.z);*/
+            //averaging mechanism.
+            if(xAccelMax == 0 && yAccelMax == 0 && zAccelMax == 0){//if these value havese mu been reset
+              xAccelMax = aaReal.x;  //then the
+              yAccelMax = aaReal.y;
+              zAccelMax = aaReal.z;
+              xAccelMin = aaReal.x;
+              yAccelMin = aaReal.y;
+              zAccelMin = aaReal.z;
+            }
+            xAccelAvg += aaReal.x;
+            yAccelAvg += aaReal.y;
+            zAccelAvg += aaReal.z;
+            xAccelSampCount++;
+            yAccelSampCount++;
+            zAccelSampCount++;
+            
      /*   #endif
 
         #ifdef OUTPUT_READABLE_WORLDACCEL
