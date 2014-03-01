@@ -12,7 +12,8 @@ This drops the FIFO IN/OUT rate to only around 5-6Hz, which allows code doing ot
 CHANGELOG: (also see git)
 2014-1-30:  Created file. Added most initial config code. 
 2014-2-4: Finished off roughly. Needs some tweaking. Not too bad though; seems to work.
-014-2-28: Added some offsets created by calibration program available on forum. Seems to be roughly accurate. Added averaging mechanism for accelerometer.
+2014-2-28: Added some offsets created by calibration program available on forum. Seems to be roughly accurate. Added averaging mechanism for accelerometer.
+2014-2-1: Added gyro averaging. Seems to work. NB TODO: finish accel max/min system.
 */
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
@@ -93,9 +94,12 @@ void loop(){
       xAccelAvg = (int)(xAccelAvg / xAccelSampCount);
       yAccelAvg = (yAccelAvg / yAccelSampCount);
       zAccelAvg = (zAccelAvg / zAccelSampCount);
-      Serial.println(xAccelAvg);
-      Serial.println(yAccelAvg);
-      Serial.println(zAccelAvg);
+      xGyroAvg = (xGyroAvg / xGyroSampCount);
+      yGyroAvg = yGyroAvg / yGyroSampCount;
+      zGyroAvg = zGyroAvg / zGyroSampCount;
+      Serial.println(xGyroAvg);
+      Serial.println(yGyroAvg);
+      Serial.println(zGyroAvg);
       Serial.println("=========================");
      averageTimer = millis();
      xAccelAvg = 0;
@@ -104,8 +108,14 @@ void loop(){
      xAccelSampCount = 0;
      yAccelSampCount = 0;
      zAccelSampCount = 0;
+     xGyroAvg = 0;
+     yGyroAvg = 0;
+     zGyroAvg = 0;
+     xGyroSampCount = 0;
+     yGyroSampCount = 0;
+     zGyroSampCount = 0;     
      
-    }
+     }
     
     
     
@@ -166,15 +176,20 @@ void loop(){
 */
   //      #ifdef OUTPUT_READABLE_YAWPITCHROLL
             // display Euler angles in degrees
-/*            mpu.dmpGetQuaternion(&q, fifoBuffer);
+            mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);
-            Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);*/
+            ypr[0] *= 180/M_PI;
+            ypr[1] *= 180/M_PI;
+            ypr[2] *= 180/M_PI;
+
+            xGyroAvg += ypr[0];
+            yGyroAvg += ypr[1];
+            zGyroAvg += ypr[2];
+            xGyroSampCount++;
+            yGyroSampCount++;
+            zGyroSampCount++;
+            
 //        #endif
 
      //   #ifdef OUTPUT_READABLE_REALACCEL
