@@ -114,7 +114,12 @@ void loop(){
      xGyroSampCount = 0;
      yGyroSampCount = 0;
      zGyroSampCount = 0;     
-     
+     xAccelMax = 0;
+     yAccelMax = 0;
+     zAccelMax = 0;
+     xAccelMin = 0;
+     yAccelMin = 0;
+     zAccelMin = 0;
      }
     
     
