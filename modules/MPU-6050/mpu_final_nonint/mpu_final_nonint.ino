@@ -15,6 +15,7 @@ CHANGELOG: (also see git)
 2014-2-28: Added some offsets created by calibration program available on forum. Seems to be roughly accurate. Added averaging mechanism for accelerometer.
 2014-2-1: Added gyro averaging. Seems to work. NB TODO: finish accel max/min system.
 2014-2-2: Added accel max/min. Should be ready for integration.
+2014-2-3: Tested on T-Minus
 */
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
@@ -51,8 +52,9 @@ void dmpDataReady(){
 void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(9600);
-  while(!Serial.available());//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
+  while(!Serial.available())  ;//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
   mpu.initialize();
+ 
   if(!mpu.testConnection())
     Serial.println("Error - MPU6050 not found.");
   else
