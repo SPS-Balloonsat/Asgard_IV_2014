@@ -14,7 +14,8 @@ CHANGELOG: (also see git)
 2014-2-4: Finished off roughly. Needs some tweaking. Not too bad though; seems to work.
 2014-2-28: Added some offsets created by calibration program available on forum. Seems to be roughly accurate. Added averaging mechanism for accelerometer.
 2014-2-1: Added gyro averaging. Seems to work. NB TODO: finish accel max/min system.
-2014-2-2: Added accel max/min. Should be ready for integration.
+2014-2-2: Added accel max/min. Seems to work.Should now be ready fo integration.
+2014-2-3: Stripped serial stuff, other unnecessary weight. Reduced size by ~800b, but there we go...
 */
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
@@ -27,7 +28,6 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 Quaternion q;           // [w, x, y, z]         quaternion container
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 int fifoCount;
@@ -50,13 +50,10 @@ void dmpDataReady(){
 
 void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
-  Serial.begin(9600);
-  while(!Serial.available());//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
+
   mpu.initialize();
   if(!mpu.testConnection())
-    Serial.println("Error - MPU6050 not found.");
-  else
-    Serial.println("Online.");
+    ; //what to do now?
  
   int dmpConfigStatus = mpu.dmpInitialize();
 //Calibration code offsets; -2523	396	1266	-11	-8	13
@@ -66,7 +63,7 @@ void setup(){
     mpu.setXGyroOffset(-11);
     mpu.setYGyroOffset(-8);
     mpu.setZGyroOffset(14);
-    
+    /*
     
     if(dmpConfigStatus == 0){
       Serial.println("Configuration success.");
@@ -74,14 +71,10 @@ void setup(){
       //On my Arduino Leonardo, interrupt pin 0 is actually one of the i2c pins, so we'll use interrupt pin 2 (pin 0)
       attachInterrupt(2, dmpDataReady, RISING);
       packetSize = mpu.dmpGetFIFOPacketSize();
-    }
-    else{
-      if(dmpConfigStatus == 1)
-        Serial.println("DMP initial memory load failed - couldn't program.");
-      else if(dmpConfigStatus == 2)
-        Serial.println("DMP config updates failed.");
-    }  
-        Serial.println("Enabling DMP");//It transpires that this is important. Can't think why.
+    }*/
+          attachInterrupt(2, dmpDataReady, RISING);
+      packetSize = mpu.dmpGetFIFOPacketSize();
+    //It transpires that this is important. Can't think why.
      mpu.setDMPEnabled(true);
      averageTimer = millis();
 
@@ -92,19 +85,15 @@ void loop(){
     if ((millis()-averageTimer) >= averagePeriod){
       //round up averages
       //store instead of Serial
-      xAccelAvg = (int)(xAccelAvg / xAccelSampCount);
+      xAccelAvg = (xAccelAvg / xAccelSampCount);
       yAccelAvg = (yAccelAvg / yAccelSampCount);
       zAccelAvg = (zAccelAvg / zAccelSampCount);
       xGyroAvg = (xGyroAvg / xGyroSampCount);
       yGyroAvg = yGyroAvg / yGyroSampCount;
       zGyroAvg = zGyroAvg / zGyroSampCount;
-      Serial.println(xAccelMax);
-      Serial.println(yAccelMin);
-      Serial.println(zAccelMax);
-      Serial.println("=========================");
+      
      averageTimer = millis();
-     xAccelAvg = 0;
-     yAccelAvg = 0;
+     xAccelAvg = 0;yAccelAvg = 0;
      zAccelAvg = 0;
      xAccelSampCount = 0;
      yAccelSampCount = 0;
@@ -127,7 +116,7 @@ void loop(){
     
     
   //=======================================================================================================================================================
-  if(mpuInterrupt == true){
+  if (mpuInterrupt == true){
     mpuInterrupt = false;    
                      //next section lifted directly from example code incl. comments.  Some comments are added for clarity.=============================
        // reset interrupt flag and get INT_STATUS byte
@@ -139,8 +128,7 @@ void loop(){
     // check for overflow (this should never happen unless our code is too inefficient)
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
         // reset so we can continue cleanly
-        mpu.resetFIFO();
-        Serial.println(F("FIFO overflow!"));  //"Sound the alarum bell!" If this happens, we probably need to look at reducing dmp frequency, or possibly increasing fifo buffer size.
+        mpu.resetFIFO();  //"Sound the alarum bell!" If this happens, we probably need to look at reducing dmp frequency, or possibly increasing fifo buffer size.
                                                 //                            Otherwise we'll just have to improve the speed of the other code in the main loop.
 
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
@@ -185,16 +173,13 @@ void loop(){
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            ypr[0] *= 180/M_PI;
-            ypr[1] *= 180/M_PI;
-            ypr[2] *= 180/M_PI;
-
-            xGyroAvg += ypr[0];
-            yGyroAvg += ypr[1];
-            zGyroAvg += ypr[2];
-            xGyroSampCount++;
-            yGyroSampCount++;
-            zGyroSampCount++;
+            
+            xGyroAvg += (180/M_PI * ypr[0]);
+            yGyroAvg += (180/M_PI * ypr[1]);
+            zGyroAvg += (180/M_PI * ypr[2]);
+            int inc = ++xGyroSampCount;
+            yGyroSampCount=inc;
+            zGyroSampCount=inc;
             
 //        #endif
 
@@ -231,13 +216,12 @@ void loop(){
               yAccelMin = aaReal.y;
             if(zAccelMin > aaReal.z)
               zAccelMin = aaReal.z;   
-              
             xAccelAvg += aaReal.x;
             yAccelAvg += aaReal.y;
             zAccelAvg += aaReal.z;
-            xAccelSampCount++;
-            yAccelSampCount++;
-            zAccelSampCount++;
+            inc = ++xAccelSampCount;
+            yAccelSampCount=inc;
+            zAccelSampCount=inc;
             
      /*   #endif
 
