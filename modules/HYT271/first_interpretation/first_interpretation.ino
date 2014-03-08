@@ -19,7 +19,7 @@ void setup(){
   Wire.begin();//Join i2c bus
   Serial.begin(9600);//set up serial for debugging
   send_HYT_MR();//We'll see if we can eliminate this delay in the final copy.  
-  
+
 }
 
 void loop(){

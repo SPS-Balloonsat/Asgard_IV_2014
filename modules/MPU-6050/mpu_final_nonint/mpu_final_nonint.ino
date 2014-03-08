@@ -16,6 +16,7 @@ CHANGELOG: (also see git)
 2014-2-1: Added gyro averaging. Seems to work. NB TODO: finish accel max/min system.
 2014-2-2: Added accel max/min. Should be ready for integration.
 2014-2-3: Tested on T-Minus
+2014-3-8: Tested on Arduino Pro Mini 5v/16MHz. Interrupt pin CRUCIAL - INT 0. (pin 2)
 */
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
@@ -74,7 +75,7 @@ void setup(){
       Serial.println("Configuration success.");
       //Consider using interrupts - can we afford them with everything else going on?
       //On my Arduino Leonardo, interrupt pin 0 is actually one of the i2c pins, so we'll use interrupt pin 2 (pin 0)
-      attachInterrupt(2, dmpDataReady, RISING);
+      attachInterrupt(0, dmpDataReady, RISING);
       packetSize = mpu.dmpGetFIFOPacketSize();
     }
     else{
@@ -190,7 +191,6 @@ void loop(){
             ypr[0] *= 180/M_PI;
             ypr[1] *= 180/M_PI;
             ypr[2] *= 180/M_PI;
-
             xGyroAvg += ypr[0];
             yGyroAvg += ypr[1];
             zGyroAvg += ypr[2];
