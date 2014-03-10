@@ -1,3 +1,5 @@
+#include <TinyGPS.h>
+
 /*
  GPS Level Convertor Board Test Script
  03/05/2012 2E0UPU
@@ -14,7 +16,9 @@
 #include <SoftwareSerial.h>
 SoftwareSerial GPS(10, 11);
 byte gps_set_sucess = 0 ;
- 
+long latitude, longitude;
+
+ TinyGPS gps;//instantiate tinyGPS object
 void setup()
 {
   GPS.begin(9600); 
@@ -47,11 +51,15 @@ void setup()
 void loop()
 {
 
-    if(GPS.available())
+    while(GPS.available())
     {
       // THIS IS THE MAIN LOOP JUST READS IN FROM THE GPS SERIAL AND ECHOS OUT TO THE ARDUINO SERIAL.
-      Serial.write(GPS.read()); 
-    }
+      gps.encode(GPS.read()); //ask tinyGPS to decode the NMEA stuff
+      gps.get_position(&latitude, &longitude);
+      Serial.println(latitude);
+      Serial.println(longitude);
+Serial.println("================");
+}
  
   
 }   
@@ -61,7 +69,7 @@ void loop()
 void sendUBX(uint8_t *MSG, uint8_t len) {
   for(int i=0; i<len; i++) {
     GPS.write(MSG[i]);
-    Serial.print(MSG[i], HEX);
+  //  Serial.print(MSG[i], HEX);
   }
   GPS.println();
 }
