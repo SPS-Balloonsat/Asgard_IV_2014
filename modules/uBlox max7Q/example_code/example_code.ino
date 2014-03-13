@@ -14,9 +14,10 @@
  */
  
 #include <SoftwareSerial.h>
-SoftwareSerial GPS(10, 11);
+SoftwareSerial GPS(8, 9);
 byte gps_set_sucess = 0 ;
 long latitude, longitude;
+unsigned long time, date, gps_speed, gps_course;
 
  TinyGPS gps;//instantiate tinyGPS object
 void setup()
@@ -38,7 +39,7 @@ void setup()
   //  THIS COMMAND SETS FLIGHT MODE AND CONFIRMS IT 
   Serial.println("Setting uBlox nav mode: ");
   uint8_t setNav[] = {
-    0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x06, 0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0xDC                        };
+   };
   while(!gps_set_sucess)
   {
     sendUBX(setNav, sizeof(setNav)/sizeof(uint8_t));
@@ -47,20 +48,27 @@ void setup()
   gps_set_sucess=0;
  
 }
- 
+ byte count_loop = 0;
 void loop()
 {
 
     while(GPS.available())
     {
+      char readFromGPS = GPS.read();
       // THIS IS THE MAIN LOOP JUST READS IN FROM THE GPS SERIAL AND ECHOS OUT TO THE ARDUINO SERIAL.
-      gps.encode(GPS.read()); //ask tinyGPS to decode the NMEA stuff
-      gps.get_position(&latitude, &longitude);
-      Serial.println(latitude);
-      Serial.println(longitude);
-Serial.println("================");
+      gps.encode(readFromGPS); //ask tinyGPS to decode the NMEA stuff
+
 }
- 
+count_loop++;
+    if((count_loop % 10)==0){
+      gps.get_position(&latitude, &longitude);
+      gps.get_datetime(&date, &time);
+      Serial.println(time);
+      Serial.println(latitude);
+     Serial.println(longitude);
+      Serial.println("================");
+      delay(200);
+ }
   
 }   
  
