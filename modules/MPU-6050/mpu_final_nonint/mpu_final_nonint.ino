@@ -2,7 +2,7 @@
 /*
 SPS Balloonsat 2014 - ASGARD-IV
 MPU-6050 non-integrated motion sensing code
-Based off Jeff Rowberg's i2cdevlib library and example code (which is MIT licensed)
+Based on Jeff Rowberg's i2cdevlib library and example code (which is MIT licensed)
 NB This code relies upon the MPU6050_6Axis_MotionApps20.h file
 having been altered such that line 305 reads 0x02,   0x16,   0x02,   0x00, 0x1E               // D_0_22 inv_set_fifo_rate
 (the last one being the altered number)
@@ -17,6 +17,7 @@ CHANGELOG: (also see git)
 2014-2-2: Added accel max/min. Should be ready for integration.
 2014-2-3: Tested on T-Minus
 2014-3-8: Tested on Arduino Pro Mini 5v/16MHz. Interrupt pin CRUCIAL - INT 0. (pin 2)
+2014-3-14: Tested on Teensy 3.1: works well. NB need to set pinMode before using attachInterrupt
 */
 #include <Wire.h>
 #include <MPU6050_6Axis_MotionApps20.h>
@@ -40,7 +41,8 @@ int yAccelMax, yAccelMin, yAccelAvg, yAccelSampCount;
 int zAccelMax, zAccelMin, zAccelAvg,zAccelSampCount;//to be used for the purposes suggested by the names!
 int xGyroAvg, yGyroAvg, zGyroAvg, xGyroSampCount,yGyroSampCount,zGyroSampCount;
 unsigned long averageTimer = 0;
-#define averagePeriod 8500
+#define averagePeriod 500
+#define mpuInterruptNumber 0
 volatile boolean mpuInterrupt=false;
 boolean mpuIntStatus = false;
 
@@ -48,12 +50,13 @@ boolean mpuIntStatus = false;
 
 void dmpDataReady(){
   mpuInterrupt = true;  //same code as i2cdevlib
+
 }
 
 void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(9600);
-  while(!Serial.available())  ;//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
+ // while(!Serial.available())  ;//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
   mpu.initialize();
  
   if(!mpu.testConnection())
@@ -75,7 +78,8 @@ void setup(){
       Serial.println("Configuration success.");
       //Consider using interrupts - can we afford them with everything else going on?
       //On my Arduino Leonardo, interrupt pin 0 is actually one of the i2c pins, so we'll use interrupt pin 2 (pin 0)
-      attachInterrupt(0, dmpDataReady, RISING);
+      pinMode(mpuInterruptNumber, INPUT);
+      attachInterrupt(mpuInterruptNumber, dmpDataReady, RISING);
       packetSize = mpu.dmpGetFIFOPacketSize();
     }
     else{
@@ -101,9 +105,9 @@ void loop(){
       xGyroAvg = (xGyroAvg / xGyroSampCount);
       yGyroAvg = yGyroAvg / yGyroSampCount;
       zGyroAvg = zGyroAvg / zGyroSampCount;
-      Serial.println(xAccelMax);
-      Serial.println(yAccelMin);
-      Serial.println(zAccelMax);
+      Serial.println(xGyroAvg);
+      Serial.println(yGyroAvg);
+      Serial.println(zGyroAvg);
       Serial.println("=========================");
      averageTimer = millis();
      xAccelAvg = 0;
