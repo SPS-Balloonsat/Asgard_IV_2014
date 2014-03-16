@@ -10,20 +10,26 @@ Changelog:
 */
 //I2C library
 #include <Wire.h>
-//General definitions
+
+//General definitions =========================================================================
 #define averagePeriod 500
 
-//MPU libraries=========================================================================
+//GPS library
+#include <TinyGPS++.h>
+//GPS definition
+TinyGPS++ gps;
+
+//MPU libraries =========================================================================
 #include <I2Cdev.h>
 #include <MPU6050_6Axis_MotionApps20.h>
 #include <helper_3dmath.h>
 
-//HYT-271 definitions
+//HYT-271 definitions =========================================================================
 #define hytAddr 0x28
 float temp, hum;
 byte hData[4];
 
-//MPU definitions=======================================================
+//MPU definitions =======================================================
 MPU6050 mpu;//where it all happens!
 //Taken from example code
 uint8_t fifoBuffer[64]; // FIFO storage buffer
@@ -104,6 +110,7 @@ void loop(){
     handle_HYT_data();
     send_HYT_MR();
     Serial.println(hum);
+    //===============================================================================
     //MPU averaging code.
     //round up averages
     //store instead of Serial
@@ -252,5 +259,3 @@ void handle_HYT_data(){
     Serial.println("Data out of range.");
   }
 }
-
-

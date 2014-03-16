@@ -1,45 +1,40 @@
-#include <TinyGPS.h>
-
 /*
- GPS Level Convertor Board Test Script
- 03/05/2012 2E0UPU
- For use with the HAB Supplies Level Convertor Board
- http://ava.upuaut.net/store
- 
- This example connects the GPS via Software Serial.
- Initialise the GPS Module in Flight Mode and then echo's out the NMEA Data to the Arduinos onboard Serial port.
- 
- This example code is in the public domain.
- Additional Code by J Coxon (http://ukhas.org.uk/guides:falcom_fsa03)
- */
- 
-#include <SoftwareSerial.h>
-SoftwareSerial GPS(8, 9);
-byte gps_set_sucess = 0 ;
-long latitude, longitude;
-unsigned long time, date, gps_speed, gps_course;
+SPS Balloonsat 2014.
+GPS interface code w/ tinyGPS. Adapted from example code from HAB Supplies - see below.
+Changelog:
+2014-3-16
 
- TinyGPS gps;//instantiate tinyGPS object
+  GPS Level Convertor Board Test Script
+  03/05/2012 2E0UPU
+  For use with the HAB Supplies Level Convertor Board
+  http://ava.upuaut.net/store
+ 
+  Initialise the GPS Module in Flight Mode and then echo's out the NMEA Data to the Software Serial1.
+ 
+  This example code is in the public domain.
+  Additional Code by J Coxon (http://ukhas.org.uk/guides:falcom_fsa03)
+ */
+#include <TinyGPS++.h>
+ 
+TinyGPSPlus gps;
+
+ 
+ 
+byte gps_set_sucess = 0 ;
+ 
 void setup()
 {
-  GPS.begin(9600); 
-  // START OUR SERIAL DEBUG PORT
   Serial.begin(9600);
-  while(!Serial.available());  Serial.println("GPS Level Convertor Board Test Script");
+  Serial1.begin(9600);
+  Serial.println("GPS Level Convertor Board Test Script");
   Serial.println("03/06/2012 2E0UPU");
   Serial.println("Initialising....");
-  //
-  // THE FOLLOWING COMMAND SWITCHES MODULE TO 4800 BAUD
-  // THEN SWITCHES THE SOFTWARE SERIAL TO 4,800 BAUD
-  //
-  GPS.print("$PUBX,41,1,0007,0003,4800,0*13\r\n"); 
-  GPS.begin(4800);
-  GPS.flush();
  
-  //  THIS COMMAND SETS FLIGHT MODE AND CONFIRMS IT 
+ // THIS COMMAND SETS MODE AND CONFIRMS IT 
   Serial.println("Setting uBlox nav mode: ");
-  uint8_t setNav[] = {
-   };
+  uint8_t setNav[] = {  //Portable mode
+  0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x0F, 0xB5, 0x62, 0x06, 0x24, 0x00, 0x00, 0x2A, 0x84                         
+  };
   while(!gps_set_sucess)
   {
     sendUBX(setNav, sizeof(setNav)/sizeof(uint8_t));
@@ -48,38 +43,34 @@ void setup()
   gps_set_sucess=0;
  
 }
- byte count_loop = 0;
+ 
 void loop()
 {
-
-    while(GPS.available())
-    {
-      char readFromGPS = GPS.read();
-      // THIS IS THE MAIN LOOP JUST READS IN FROM THE GPS SERIAL AND ECHOS OUT TO THE ARDUINO SERIAL.
-      gps.encode(readFromGPS); //ask tinyGPS to decode the NMEA stuff
-
-}
-count_loop++;
-    if((count_loop % 10)==0){
-      gps.get_position(&latitude, &longitude);
-      gps.get_datetime(&date, &time);
-      Serial.println(time);
-      Serial.println(latitude);
-     Serial.println(longitude);
-      Serial.println("================");
-      delay(200);
- }
+  delay(200);
+  while(Serial1.available()) {
+    char inByte = Serial1.read();
+    gps.encode(inByte);
+  }
   
-}   
- 
- 
+  Serial.print("Time:"); 
+  Serial.println(gps.time.value());    
+  if(gps.isValid()){
+  Serial.print("Lat/long:"); 
+  Serial.print(gps.location.lat());
+  Serial.print(", ");
+  Serial.println(gps.location.lng());
+  Serial.print("Horizontal accuracy:");
+  Serial.println(gps.hdop.value() / 100);
+  }
+  else Serial.println("Data not valid.");
+  
+  
 // Send a byte array of UBX protocol to the GPS
 void sendUBX(uint8_t *MSG, uint8_t len) {
   for(int i=0; i<len; i++) {
-    GPS.write(MSG[i]);
-  //  Serial.print(MSG[i], HEX);
+    Serial1.write(MSG[i]);
   }
-  GPS.println();
+  Serial1.println();
 }
  
  
@@ -125,8 +116,8 @@ boolean getUBX_ACK(uint8_t *MSG) {
     }
  
     // Make sure data is available to read
-    if (GPS.available()) {
-      b = GPS.read();
+    if (Serial1.available()) {
+      b = Serial1.read();
  
       // Check that bytes arrive in sequence as per expected ACK packet
       if (b == ackPacket[ackByteID]) { 
