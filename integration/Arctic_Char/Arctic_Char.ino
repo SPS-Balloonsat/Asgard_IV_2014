@@ -6,7 +6,7 @@ Codename: "Arctic Char"
 Changelog:
 2014-3-14: Created file. Added MPU library
 2014-3-15: Added HYT-271 functionality.
-
+2014-3-18: Added GPS. Removed potential for infinite loop in GPS setup if connection faulty. Began SD integration.
 */
 //I2C library
 #include <Wire.h>
@@ -14,15 +14,31 @@ Changelog:
 //General definitions =========================================================================
 #define averagePeriod 500
 
-//GPS library
+//SD libraries =========================================================================
+#include <SPI.h>
+#include <SD.h>
+
+//GPS library =========================================================================
 #include <TinyGPS++.h>
-//GPS definition
-TinyGPS++ gps;
+
+//GPS definition =========================================================================
+TinyGPSPlus gps;
+double latitude, longitude, gps_alt, gps_speed; //lat, long, speed, altitude, speed
+unsigned int gps_sat_count, gps_date, gps_time, gps_course ;//number of satellites, date, time, course in 1/100ths of a deg
+//...alt in cm (saves conversion!)
+byte gps_data_retrieved = 0; //gps data state indicator - 0 => success, 1 => only date/time, 2=> total disaster.
+
 
 //MPU libraries =========================================================================
 #include <I2Cdev.h>
 #include <MPU6050_6Axis_MotionApps20.h>
 #include <helper_3dmath.h>
+
+//SD definitions =========================================================================
+File currentLogFile;
+
+//GPS definitions =======================================================================
+byte gps_set_sucess = 0;
 
 //HYT-271 definitions =========================================================================
 #define hytAddr 0x28
@@ -45,6 +61,7 @@ int xAccelMax, xAccelMin, xAccelAvg, xAccelSampCount;
 int yAccelMax, yAccelMin, yAccelAvg, yAccelSampCount;
 int zAccelMax, zAccelMin, zAccelAvg,zAccelSampCount;//to be used for the purposes suggested by the names!
 int xGyroAvg, yGyroAvg, zGyroAvg, xGyroSampCount,yGyroSampCount,zGyroSampCount;
+byte dmpConfigStatus;
 unsigned long averageTimer = 0;
 
 #define mpuInterruptNumber 0
@@ -61,7 +78,21 @@ void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(38400);
  // while(!Serial.available())  ;//wait for the user to open the serial monitor (to be removed in the final edition)<<<<<<<<<<<<<<<<<<<=================================================================================
-  
+  //GPS Init code ==================================================================================
+  Serial1.begin(9600);
+ // THIS COMMAND SETS MODE AND CONFIRMS IT 
+  Serial.println("Setting GPS nav mode: ");
+  uint8_t setNav[] = {  //Portable mode - see separate text files
+  0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x0F, 0xB5, 0x62, 0x06, 0x24, 0x00, 0x00, 0x2A, 0x84                         
+  };
+  byte loop_counter = 0;
+  while(!gps_set_sucess && loop_counter < 15)
+  {
+    loop_counter++;
+    sendUBX(setNav, sizeof(setNav)/sizeof(uint8_t));
+    gps_set_sucess=getUBX_ACK(setNav);
+  }
+  gps_set_sucess=0;
   //HYT271 init code ========================================================================================
   send_HYT_MR();
   //MPU6050 init code ========================================================================================
@@ -72,7 +103,7 @@ void setup(){
   else
     Serial.println("Online.");
  
-  int dmpConfigStatus = mpu.dmpInitialize();
+  dmpConfigStatus = mpu.dmpInitialize();
 //Calibration code offsets; -2523	396	1266	-11	-8	13
     mpu.setXAccelOffset(-2518);
     mpu.setYAccelOffset(395);
@@ -103,9 +134,38 @@ void setup(){
 }
 
 void loop(){
+  //gps code - deliciously simple!
+   while(Serial1.available())
+     gps.encode(Serial1.read());
+     
    
-  // MPU6050 code ====================================================================
+
   if ((millis()-averageTimer) >= averagePeriod){//averaging code
+  //GPS - get date, time, long, lat, course, speed
+  if(gps.time.isValid() && gps.location.isValid()){//if gps data valid
+    latitude = gps.location.lat();//lat, long - doubles
+    longitude = gps.location.lng();
+    gps_date = gps.date.value();//date, time DDMMYY SSMMHH unsigned ints (int 32)
+    gps_time = gps.time.value();
+    gps_speed = gps.speed.knots();//speed in kts - double (=float)
+    gps_course = gps.course.value();//course in 1/100ths degree - i32
+    gps_alt = gps.altitude.feet();//alt in feet (double)   
+    gps_sat_count = gps.satellites.value();//no of satellites - i32
+    gps_data_retrieved = 0;
+  }
+  else{
+    if(gps.time.isValid()){//if only time reading valid
+    gps_date = gps.date.value();
+    gps_time = gps.time.value();
+    gps_data_retrieved = 1;
+  }
+  else{//if no data recieved, say so.
+    gps_data_retrieved = 2;
+  }
+  }
+    
+    
+  //humidity detection code
     read_HYT();
     handle_HYT_data();
     send_HYT_MR();
@@ -143,6 +203,7 @@ void loop(){
      yAccelMin = 0;
      zAccelMin = 0;
  }
+ //MPU6050 code ======================================================================================================
   if(mpuInterrupt == true){//MPU reading code.
     mpuInterrupt = false;    
        //next section lifted directly from example code incl. comments.  Some comments are added for clarity.=============================
@@ -257,5 +318,74 @@ void handle_HYT_data(){
   }
   else{
     Serial.println("Data out of range.");
+  }
+}
+
+//GPS functions - provided w/ example code ============================================================
+
+// Send a byte array of UBX protocol to the GPS
+void sendUBX(uint8_t *MSG, uint8_t len) {
+  for(int i=0; i<len; i++) {
+    Serial1.write(MSG[i]);
+  }
+  Serial1.println();
+}
+ 
+ 
+// Calculate expected UBX ACK packet and parse UBX response from GPS
+boolean getUBX_ACK(uint8_t *MSG) {
+  uint8_t b;
+  uint8_t ackByteID = 0;
+  uint8_t ackPacket[10];
+  unsigned long startTime = millis();
+  Serial.print(" * Reading ACK response: ");
+ 
+  // Construct the expected ACK packet    
+  ackPacket[0] = 0xB5;	// header
+  ackPacket[1] = 0x62;	// header
+  ackPacket[2] = 0x05;	// class
+  ackPacket[3] = 0x01;	// id
+  ackPacket[4] = 0x02;	// length
+  ackPacket[5] = 0x00;
+  ackPacket[6] = MSG[2];	// ACK class
+  ackPacket[7] = MSG[3];	// ACK id
+  ackPacket[8] = 0;		// CK_A
+  ackPacket[9] = 0;		// CK_B
+ 
+  // Calculate the checksums
+  for (uint8_t i=2; i<8; i++) {
+    ackPacket[8] = ackPacket[8] + ackPacket[i];
+    ackPacket[9] = ackPacket[9] + ackPacket[8];
+  }
+ 
+  while (1) {
+ 
+    // Test for success
+    if (ackByteID > 9) {
+      // All packets in order!
+      Serial.println(" (SUCCESS!)");
+      return true;
+    }
+ 
+    // Timeout if no valid response in 3 seconds
+    if (millis() - startTime > 3000) { 
+      Serial.println(" (FAILED!)");
+      return false;
+    }
+ 
+    // Make sure data is available to read
+    if (Serial1.available()) {
+      b = Serial1.read();
+ 
+      // Check that bytes arrive in sequence as per expected ACK packet
+      if (b == ackPacket[ackByteID]) { 
+        ackByteID++;
+        Serial.print(b, HEX);
+      } 
+      else {
+        ackByteID = 0;	// Reset and look again, invalid order
+      }
+ 
+    }
   }
 }

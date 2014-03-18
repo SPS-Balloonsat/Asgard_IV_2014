@@ -1,5 +1,3 @@
-
-
 float reading, pressure;
 #define pressPin A0
 

@@ -29,7 +29,7 @@ void setup()
   Serial.println("GPS Level Convertor Board Test Script");
   Serial.println("03/06/2012 2E0UPU");
   Serial.println("Initialising....");
- 
+ while(!Serial.available());
  // THIS COMMAND SETS MODE AND CONFIRMS IT 
   Serial.println("Setting uBlox nav mode: ");
   uint8_t setNav[] = {  //Portable mode
@@ -54,7 +54,7 @@ void loop()
   
   Serial.print("Time:"); 
   Serial.println(gps.time.value());    
-  if(gps.isValid()){
+  if(true){
   Serial.print("Lat/long:"); 
   Serial.print(gps.location.lat());
   Serial.print(", ");
@@ -63,7 +63,7 @@ void loop()
   Serial.println(gps.hdop.value() / 100);
   }
   else Serial.println("Data not valid.");
-  
+}
   
 // Send a byte array of UBX protocol to the GPS
 void sendUBX(uint8_t *MSG, uint8_t len) {
