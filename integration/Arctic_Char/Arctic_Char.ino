@@ -24,9 +24,7 @@ SPS Balloonsat 2014
 
 //GPS definition =========================================================================
 TinyGPSPlus gps;
-double latitude, longitude, gps_alt, gps_speed; //lat, long, speed, altitude, speed
-unsigned int gps_sat_count, gps_date, gps_time, gps_course ;//number of satellites, date, time, course in 1/100ths of a deg
-//...alt in cm (saves conversion!)
+
 byte gps_data_retrieved = 0; //gps data state indicator - 0 => success, 1 => only date/time, 2=> total disaster.
 
 
@@ -70,7 +68,7 @@ int xGyroAvg, yGyroAvg, zGyroAvg, xGyroSampCount,yGyroSampCount,zGyroSampCount;
 byte dmpConfigStatus;
 unsigned long averageTimer = 0;
 
-#define mpuInterruptNumber 0
+#define mpuInterruptNumber 5
 volatile boolean mpuInterrupt=false;
 boolean mpuIntStatus = false;
 
@@ -92,13 +90,12 @@ void setup(){
     Serial.println("Initialisation failure.");//there doesn't seem much point in doing anything else in this eventuality!   
  
   currentLogFile = SD.open("datalogging.csv", FILE_WRITE);//create log file (or reopen)
-  currentLogFile.write("gps_lat, gps_long, gps_date, gps_time, gps_status");
+  currentLogFile.write("gps_lat,gps_long,gps_date,gps_time,gps_SC,gps_speed,gps_course,gps_alt,temp,hum");
   //gps_lat, gps_long, gps_date, gps_time, gps_status, accMaX, accMaY, accMaZ, accMiX, accMiY, accMiz, accAvX, accAvY, accAvZ, gyrAvX, gyrAvY, gyrAvZ, press, temp, hum, gammaCPS
-  currentLogFile.write(", accMaX, accMaY, accMaZ, accMiX, accMiY, accMiz, accAvX,");
-  currentLogFile.write(" accAvY, accAvZ, gyrAvX, gyrAvY, gyrAvZ,");
-  currentLogFile.write(" press, temp, hum, gammaCPS \n");
+  currentLogFile.write(",accMaX,accMaY,accMaZ,accMiX,accMiY,accMiz,accAvX,");
+  currentLogFile.write("accAvY,accAvZ,gyrAvX,gyrAvY,gyrAvZ,gammaCPS,sampTime \n");
   currentLogFile.close();//Write headers and save.
-  Serial.println(F"SD datalogging headers written.");
+  Serial.println("SD datalogging headers written.");
 
   //GPS Init code ==================================================================================
   Serial1.begin(9600);
@@ -163,66 +160,56 @@ void loop(){
 
 
   if ((millis()-averageTimer) >= averagePeriod){//averaging code
-    //GPS - get date, time, long, lat, course, speed
-    if(gps.time.isValid() && gps.location.isValid()){//if gps data valid
-      latitude = gps.location.lat();//lat, long - doubles
-      longitude = gps.location.lng();
-      gps_date = gps.date.value();//date, time DDMMYY SSMMHH unsigned ints (int 32)
-      gps_time = gps.time.value();
-      gps_speed = gps.speed.knots();//speed in kts - double (=float)
-      gps_course = gps.course.value();//course in 1/100ths degree - i32
-      gps_alt = gps.altitude.feet();//alt in feet (double)   
-      gps_sat_count = gps.satellites.value();//no of satellites - i32
-      gps_data_retrieved = 0;
-    }
-    else{
-      if(gps.time.isValid()){//if only time reading valid
-        gps_date = gps.date.value();
-        gps_time = gps.time.value();
-        gps_data_retrieved = 1;
-      }
-      else{//if no data recieved, say so.
-        gps_data_retrieved = 2;
-      }
-    }
-    //Gamma photon averaging
-    unsigned int gammaAvg = (unsigned int)(gammaCount / (millis()-averageTimer));
+  unsigned long timeDifference = millis() - averageTimer;
+    //GPS - get date, time, long, lat, course, speed ==================================================
+    //gps_lat,gps_long,gps_date,gps_time,gps_SC,gps_speed,gps_course,gps_alt 
+      currentLogFile = SD.open("datalogging.csv", FILE_WRITE);
+      currentLogFile.print(gps.location.lat());currentLogFile.print(",");
+      currentLogFile.print(gps.location.lng());currentLogFile.print(",");
+      currentLogFile.print(gps.date.value());currentLogFile.print(",");//date, time DDMMYY SSMMHH unsigned ints (int 32)
+      currentLogFile.print(gps.time.value());currentLogFile.print(",");
+      currentLogFile.print(gps.satellites.value());currentLogFile.print(",");//no of satellites - i32
+      currentLogFile.print(gps.speed.knots());currentLogFile.print(",");//speed in kts - double (=float)
+      currentLogFile.print(gps.course.value());currentLogFile.print(",");//course in 1/100ths degree - i32
+      currentLogFile.print(gps.altitude.feet());currentLogFile.print(",");//alt in feet (double)   
 
-    //humidity detection code
+      gps_data_retrieved = 0;
+      currentLogFile.flush();//save this data
+    
+    //humidity detection code ==============================================
     read_HYT();
     handle_HYT_data();
     send_HYT_MR();
+    //print hum and temp
+    currentLogFile.print(temp);currentLogFile.print(",");//temp,hum
+    currentLogFile.print(hum);currentLogFile.print(",");
+    currentLogFile.flush();
     //===============================================================================
     //MPU averaging code.
     //round up averages
+//  currentLogFile.write(",accMaX,accMaY,accMaZ,accMiX,accMiY,accMiz,accAvX,");  <<< headers for reference
+//  currentLogFile.write("accAvY,accAvZ,gyrAvX,gyrAvY,gyrAvZ,gammaCPS \n");
 
-    xAccelAvg = (int)(xAccelAvg / xAccelSampCount);
-    yAccelAvg = (yAccelAvg / yAccelSampCount);
-    zAccelAvg = (zAccelAvg / zAccelSampCount);
-    xGyroAvg = (xGyroAvg / xGyroSampCount);
-    yGyroAvg = yGyroAvg / yGyroSampCount;
-    zGyroAvg = zGyroAvg / zGyroSampCount;
-    //Now to do datalogging ==============================================================================
-//gps_lat, gps_long, gps_date, gps_time, gps_status, accMaX, accMaY, accMaZ, accMiX, accMiY, accMiz, accAvX, accAvY, accAvZ, gyrAvX, gyrAvY, gyrAvZ, press, temp, hum, gammaCPS
-   
-    currentLogFile = SD.open("datalogging.csv", FILE_WRITE);
-    if(gps_data_retrieved == 0){
-    currentLogFile.print(latitude);currentLogFile.print(",");
-    currentLogFile.print(longitude);currentLogFile.print(",");}
-    else
-      currentLogFile.write("0,0,");
-    if(gps_data_recieved == 0 || gps_data_received == 1){
-    currentLogFile.print(gps_date);currentLogFile.print(",");
-    currentLogFile.print(gps_time);currentLogFile.print(",");}
-    else{
-      currentLogFile.write("0,");
-      currentLogFile.print(millis());currentLogFile.print(",");
-    }
-    currentLogFile.print(gps_data_received);currentLogFile.print(",");
-    currentLogFile.print(xAccelAvg);currentLogFile.print(",");
-    currentLogFile.print(yAccelAvg);currentLogFile.print(",");
-    currentLogFile
-    averageTimer = millis();
+    currentLogFile.print(xAccelMax);currentLogFile.print(",");
+    currentLogFile.print(yAccelMax);currentLogFile.print(",");
+    currentLogFile.print(zAccelMax);currentLogFile.print(",");
+    currentLogFile.print(xAccelMin);currentLogFile.print(",");
+    currentLogFile.print(yAccelMin);currentLogFile.print(",");
+    currentLogFile.print(zAccelMin);currentLogFile.print(",");
+    currentLogFile.flush();
+    currentLogFile.print((xAccelAvg / xAccelSampCount));currentLogFile.print(",");
+    currentLogFile.print((yAccelAvg / yAccelSampCount);currentLogFile.print(",");
+    currentLogFile.print((zAccelAvg / zAccelSampCount));currentLogFile.print(",");
+    currentLogFile.print((xGyroAvg / xGyroSampCount));currentLogFile.print(",");
+    currentLogFile.print((yGyroAvg / yGyroSampCount));currentLogFile.print(",");
+    currentLogFile.print((zGyroAvg / zGyroSampCount));currentLogFile.print(",");
+    
+    //Gamma photon count
+    currentLogFile.print(gammaCount);currentLogFile.print(",");
+    currentLogFile.println(timeDifference);
+    currentLogFile.close();//save and go!
+  
+
     xAccelAvg = 0;
     yAccelAvg = 0;
     zAccelAvg = 0;
@@ -241,6 +228,7 @@ void loop(){
     xAccelMin = 0;
     yAccelMin = 0;
     zAccelMin = 0;
+    averageTimer = millis();
   }
   //MPU6050 code ======================================================================================================
   if(mpuInterrupt == true){//MPU reading code.
