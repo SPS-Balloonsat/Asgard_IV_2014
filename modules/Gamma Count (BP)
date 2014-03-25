@@ -1,0 +1,31 @@
+/* Please bear in mind that I have little experience with Arduino.
+I may not have used the most perfect or advanced methods when making this.
+However, i have tried to learn as much as I could before writing this, which is why I took a while to do it.
+This may be a little bit buggy and is subject to testing.
+In addition, I do not know the board. Some pins may need to be changed.
+*/
+
+//SPS Balloonsat Gamma Ray Counter
+
+int GammaPin = 1;   //Defining the GammaPin as 1
+volatile unsigned int GammaRays;    //Defining the variable GammaDetect
+unsigned long GammaTime;   //Defining GammaTime
+ 
+void setup() {
+  Serial.begin (9600);
+  pinmode GammaPin INPUT:    //defining GammaPin as an input
+  attachInterrupt (GammaPin, RaiseGamma, RISING);    //go to RaiseGamma when the GammaPin is getting higher
+  GammaTime = millis();    //a timer
+}
+
+void RaiseGamma () {
+  GammaRays++   //Incrementing GammaRays
+}
+
+void RepeatingLoop (){
+  if((millis()-GammaTime)>250){
+    serial.printIn((GammaRays/millis()-GammaTime));   //Displaying rays received over time
+    GammaRays = 0          //wiping GammaRays
+    GammaTime = millis()   //wiping GammaTime
+  }
+}
