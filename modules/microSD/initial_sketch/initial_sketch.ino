@@ -29,7 +29,7 @@ void setup(){
   Wire.begin();
   send_HYT_MR();
   Serial.println("Attempting to initialise microSD Card");
-  pinMode(SS, OUTPUT);
+  pinMode(SS, OUTPUT);FP
   
   if(SD.begin(selectPin))
     Serial.println("Card successfully initialised.");

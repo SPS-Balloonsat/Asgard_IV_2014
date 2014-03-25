@@ -81,15 +81,17 @@ void dmpDataReady(){
 void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(38400);
- 
+// while(!Serial.available()); 
   //SD card init code ============================================================
   pinMode(SS, OUTPUT);
   if(SD.begin(selectPin))
     Serial.println("Card successfully initialised.");
   else
     Serial.println("Initialisation failure.");//there doesn't seem much point in doing anything else in this eventuality!   
- 
-  currentLogFile = SD.open("datalogging.csv", FILE_WRITE);//create log file (or reopen)
+ while(!currentLogFile){
+  currentLogFile = SD.open("sdaf.csv", FILE_WRITE);//create log file (or reopen)
+  if(!currentLogFile)Serial.println("Error.");
+ }
   currentLogFile.write("gps_lat,gps_long,gps_date,gps_time,gps_SC,gps_speed,gps_course,gps_alt,temp,hum");
   //gps_lat, gps_long, gps_date, gps_time, gps_status, accMaX, accMaY, accMaZ, accMiX, accMiY, accMiz, accAvX, accAvY, accAvZ, gyrAvX, gyrAvY, gyrAvZ, press, temp, hum, gammaCPS
   currentLogFile.write(",accMaX,accMaY,accMaZ,accMiX,accMiY,accMiz,accAvX,");
@@ -116,7 +118,6 @@ void setup(){
   send_HYT_MR();
   //MPU6050 init code ========================================================================================
   mpu.initialize();
-
   if(!mpu.testConnection())
     Serial.println("Error - MPU6050 not found.");
   else
@@ -161,9 +162,12 @@ void loop(){
 
   if ((millis()-averageTimer) >= averagePeriod){//averaging code
   unsigned long timeDifference = millis() - averageTimer;
+  Serial.println("Logging.");
     //GPS - get date, time, long, lat, course, speed ==================================================
     //gps_lat,gps_long,gps_date,gps_time,gps_SC,gps_speed,gps_course,gps_alt 
-      currentLogFile = SD.open("datalogging.csv", FILE_WRITE);
+      currentLogFile = SD.open("new_file.csv", FILE_WRITE);
+      if(!currentLogFile)Serial.println("Error.");
+      currentLogFile.write(" ");//initiate write. Don't know why
       currentLogFile.print(gps.location.lat());currentLogFile.print(",");
       currentLogFile.print(gps.location.lng());currentLogFile.print(",");
       currentLogFile.print(gps.date.value());currentLogFile.print(",");//date, time DDMMYY SSMMHH unsigned ints (int 32)
@@ -198,7 +202,7 @@ void loop(){
     currentLogFile.print(zAccelMin);currentLogFile.print(",");
     currentLogFile.flush();
     currentLogFile.print((xAccelAvg / xAccelSampCount));currentLogFile.print(",");
-    currentLogFile.print((yAccelAvg / yAccelSampCount);currentLogFile.print(",");
+    currentLogFile.print((yAccelAvg / yAccelSampCount));currentLogFile.print(",");
     currentLogFile.print((zAccelAvg / zAccelSampCount));currentLogFile.print(",");
     currentLogFile.print((xGyroAvg / xGyroSampCount));currentLogFile.print(",");
     currentLogFile.print((yGyroAvg / yGyroSampCount));currentLogFile.print(",");
