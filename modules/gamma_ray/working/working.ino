@@ -6,21 +6,20 @@ Changelog:
 */
 #define gammaIntPin 22
 
-volatile unsigned int photonHits;
+volatile unsigned long photonHits;
 unsigned long sampleTime;
 
 void setup(){
   Serial.begin(9600);
-  while(!Serial.available());
-  pinMode(gammaIntPin, INPUT_PULLUP);//We don't want pull-up resistors - these
-  //should be on the comparator chip, I think. Check?
+ // while(!Serial.available());
+  pinMode(gammaIntPin, INPUT_PULLUP);
   attachInterrupt(gammaIntPin, incGamma, FALLING);
   sampleTime = millis();//sample timer
 }
 
 void loop(){
-  if(((millis() - sampleTime)) > 200){
-    Serial.println((float)(photonHits / (millis() - sampleTime)));
+  if(((millis() - sampleTime)) > 1000){
+    Serial.println(photonHits);
     Serial.println("==================");
     photonHits = 0;
     sampleTime = millis();
