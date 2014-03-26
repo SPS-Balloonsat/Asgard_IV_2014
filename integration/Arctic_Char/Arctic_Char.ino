@@ -8,12 +8,15 @@ SPS Balloonsat 2014
  2014-3-15: Added HYT-271 functionality.
  2014-3-18: Added GPS. Removed potential for infinite loop in GPS setup if connection faulty. Began SD integration.
  2014-3-19: SD card integration.
+ 2014-3-25: Tweaks prior to launch.
+ 2014-3-26: Added pressure sensor code (last minute). For use w/ potential divider from MPL4115, using 5k/10k resistors (top/bottom)
+ 
  */
 //I2C library
 #include <Wire.h>
 
 //General definitions =========================================================================
-#define averagePeriod 500
+#define averagePeriod 2000
 
 //SD libraries =========================================================================
 #include <SPI.h>
@@ -25,7 +28,6 @@ SPS Balloonsat 2014
 //GPS definition =========================================================================
 TinyGPSPlus gps;
 
-byte gps_data_retrieved = 0; //gps data state indicator - 0 => success, 1 => only date/time, 2=> total disaster.
 
 
 //MPU libraries =========================================================================
@@ -37,8 +39,12 @@ byte gps_data_retrieved = 0; //gps data state indicator - 0 => success, 1 => onl
 File currentLogFile;
 #define selectPin 10
 
+//Pressure definition
+#define pressurePin A6 //pin 20
+float pressure, pressure_reading;
+
 //Gamma defs
-#define gammaPin 3
+#define gammaPin 22
 volatile unsigned int gammaCount;
 
 //GPS definitions =======================================================================
@@ -66,7 +72,6 @@ int yAccelMax, yAccelMin, yAccelAvg, yAccelSampCount;
 int zAccelMax, zAccelMin, zAccelAvg,zAccelSampCount;//to be used for the purposes suggested by the names!
 int xGyroAvg, yGyroAvg, zGyroAvg, xGyroSampCount,yGyroSampCount,zGyroSampCount;
 byte dmpConfigStatus;
-unsigned long averageTimer = 0;
 
 #define mpuInterruptNumber 5
 volatile boolean mpuInterrupt=false;
@@ -77,25 +82,34 @@ void dmpDataReady(){
   mpuInterrupt = true;  //same code as i2cdevlib
 
 }
+//AverageTimer declaration ============================================================
+unsigned long averageTimer = 0;
+
 // ===============================================
 void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(38400);
-// while(!Serial.available()); 
+  pinMode(pressurePin, INPUT);
+  Serial.println("Starting readings.");
+  
+
+
   //SD card init code ============================================================
   pinMode(SS, OUTPUT);
+  delay(500);//Wait for power supply to stabilise
   if(SD.begin(selectPin))
     Serial.println("Card successfully initialised.");
   else
     Serial.println("Initialisation failure.");//there doesn't seem much point in doing anything else in this eventuality!   
+    
  while(!currentLogFile){
-  currentLogFile = SD.open("sdaf.csv", FILE_WRITE);//create log file (or reopen)
+  currentLogFile = SD.open("a.csv", FILE_WRITE);//create log file (or reopen)
   if(!currentLogFile)Serial.println("Error.");
  }
   currentLogFile.write("gps_lat,gps_long,gps_date,gps_time,gps_SC,gps_speed,gps_course,gps_alt,temp,hum");
   //gps_lat, gps_long, gps_date, gps_time, gps_status, accMaX, accMaY, accMaZ, accMiX, accMiY, accMiz, accAvX, accAvY, accAvZ, gyrAvX, gyrAvY, gyrAvZ, press, temp, hum, gammaCPS
   currentLogFile.write(",accMaX,accMaY,accMaZ,accMiX,accMiY,accMiz,accAvX,");
-  currentLogFile.write("accAvY,accAvZ,gyrAvX,gyrAvY,gyrAvZ,gammaCPS,sampTime \n");
+  currentLogFile.write("accAvY,accAvZ,gyrAvX,gyrAvY,gyrAvZ,gammaCPS,sampTime,pressure \n");
   currentLogFile.close();//Write headers and save.
   Serial.println("SD datalogging headers written.");
 
@@ -104,8 +118,7 @@ void setup(){
   // THIS COMMAND SETS MODE AND CONFIRMS IT 
   Serial.println("Setting GPS nav mode: ");
   uint8_t setNav[] = {  //Portable mode - see separate text files
-    0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x0F, 0xB5, 0x62, 0x06, 0x24, 0x00, 0x00, 0x2A, 0x84                         
-  };
+    0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x0F, 0xB5, 0x62, 0x06, 0x24, 0x00, 0x00, 0x2A, 0x84 };
   byte loop_counter = 0;
   while(!gps_set_sucess && loop_counter < 15)
   {
@@ -165,7 +178,7 @@ void loop(){
   Serial.println("Logging.");
     //GPS - get date, time, long, lat, course, speed ==================================================
     //gps_lat,gps_long,gps_date,gps_time,gps_SC,gps_speed,gps_course,gps_alt 
-      currentLogFile = SD.open("new_file.csv", FILE_WRITE);
+      currentLogFile = SD.open("a.csv", FILE_WRITE);
       if(!currentLogFile)Serial.println("Error.");
       currentLogFile.write(" ");//initiate write. Don't know why
       currentLogFile.print(gps.location.lat());currentLogFile.print(",");
@@ -176,8 +189,6 @@ void loop(){
       currentLogFile.print(gps.speed.knots());currentLogFile.print(",");//speed in kts - double (=float)
       currentLogFile.print(gps.course.value());currentLogFile.print(",");//course in 1/100ths degree - i32
       currentLogFile.print(gps.altitude.feet());currentLogFile.print(",");//alt in feet (double)   
-
-      gps_data_retrieved = 0;
       currentLogFile.flush();//save this data
     
     //humidity detection code ==============================================
@@ -196,7 +207,7 @@ void loop(){
 
     currentLogFile.print(xAccelMax);currentLogFile.print(",");
     currentLogFile.print(yAccelMax);currentLogFile.print(",");
-    currentLogFile.print(zAccelMax);currentLogFile.print(",");
+    currentLogFile.print(zAccelMax);currentLogFile.print(",");Serial.println(zAccelMax);
     currentLogFile.print(xAccelMin);currentLogFile.print(",");
     currentLogFile.print(yAccelMin);currentLogFile.print(",");
     currentLogFile.print(zAccelMin);currentLogFile.print(",");
@@ -210,7 +221,16 @@ void loop(){
     
     //Gamma photon count
     currentLogFile.print(gammaCount);currentLogFile.print(",");
-    currentLogFile.println(timeDifference);
+    currentLogFile.print(timeDifference);currentLogFile.print(",");
+    
+    //pressure ==============================================================
+    pressure_reading = analogRead(pressurePin);
+    pressure_reading *= (float)(5/1024.0);//Vout in volts
+    pressure = (float)(((float)(pressure_reading / 5) + 0.095)/ 0.0009);
+    
+    currentLogFile.println(pressure);
+    
+    
     currentLogFile.close();//save and go!
   
 
