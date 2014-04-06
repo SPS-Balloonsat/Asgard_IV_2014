@@ -1,7 +1,8 @@
 /*
 SPS Balloonsat 2014
- Initial integration. Build no.: 
+ Initial integration. 
  Codename: "Arctic Char"
+ Compiled size ~42kb.
  
  Changelog:
  2014-3-14: Created file. Added MPU library
@@ -28,8 +29,6 @@ SPS Balloonsat 2014
 
 //GPS definition =========================================================================
 TinyGPSPlus gps;
-
-
 
 //MPU libraries =========================================================================
 #include <I2Cdev.h>
@@ -91,9 +90,8 @@ void setup(){
   Wire.begin();//Join i2C bus and desktop serial bus
   Serial.begin(38400);
   pinMode(pressurePin, INPUT);
-  Serial.println("Starting readings.");
-  
 
+  Serial.println("Starting readings.");
 
   //SD card init code ============================================================
   pinMode(SS, OUTPUT);
@@ -126,8 +124,10 @@ void setup(){
     loop_counter++;
     sendUBX(setNav, sizeof(setNav)/sizeof(uint8_t));
     gps_set_sucess=getUBX_ACK(setNav);
+    
   }
   gps_set_sucess=0;
+  Serial.println("GPS done.");
   //HYT271 init code ========================================================================================
   send_HYT_MR();
   //MPU6050 init code ========================================================================================
@@ -145,7 +145,6 @@ void setup(){
   mpu.setXGyroOffset(-11);
   mpu.setYGyroOffset(-8);
   mpu.setZGyroOffset(14);
-
 
   if(dmpConfigStatus == 0){
     Serial.println("Configuration success.");
@@ -171,9 +170,8 @@ void loop(){
   //gps code - deliciously simple!
   while(Serial1.available())
     gps.encode(Serial1.read());
-
-
-
+//=========================================================================================
+//sampling code
   if ((millis()-averageTimer) >= averagePeriod){//averaging code
   unsigned long timeDifference = millis() - averageTimer;
   Serial.println("Logging.");
@@ -182,8 +180,8 @@ void loop(){
       currentLogFile = SD.open("a.csv", FILE_WRITE);
       if(!currentLogFile)Serial.println("Error.");
       currentLogFile.write(" ");//initiate write. Don't know why
-      currentLogFile.print(gps.location.lat());currentLogFile.print(",");
-      currentLogFile.print(gps.location.lng());currentLogFile.print(",");
+      currentLogFile.print(gps.location.lat()*1000000);currentLogFile.print(",");//millionths
+      currentLogFile.print(gps.location.lng()*1000000);currentLogFile.print(",");//millionths
       currentLogFile.print(gps.date.value());currentLogFile.print(",");//date, time DDMMYY SSMMHH unsigned ints (int 32)
       currentLogFile.print(gps.time.value());currentLogFile.print(",");
       currentLogFile.print(gps.satellites.value());currentLogFile.print(",");//no of satellites - i32
@@ -228,14 +226,11 @@ void loop(){
     pressure_reading = analogRead(pressurePin);
     pressure_reading *= (float)(5/1024.0);//Vout in volts
     pressure = (float)(((float)(pressure_reading / 5) + 0.095)/ 0.0009);
-    
-    currentLogFile.println(pressure);
-    
+    currentLogFile.println(pressure);   
     
     currentLogFile.close();//save and go!
-  
 
-    xAccelAvg = 0;
+    xAccelAvg = 0;//Zero values
     yAccelAvg = 0;
     zAccelAvg = 0;
     xAccelSampCount = 0;
@@ -253,7 +248,7 @@ void loop(){
     xAccelMin = 0;
     yAccelMin = 0;
     zAccelMin = 0;
-    averageTimer = millis();
+    averageTimer = millis();//reset timer
   }
   //MPU6050 code ======================================================================================================
   if(mpuInterrupt == true){//MPU reading code.
